@@ -34,3 +34,12 @@ def factor_balance(nodo: Optional[NodoAVL]) -> int:
     if nodo is None:
         return 0
     return altura(nodo.izquierdo) - altura(nodo.derecho)
+
+
+def actualizar_altura(nodo: NodoAVL) -> None:
+    """Recomputes `nodo.altura` from its current children's heights.
+
+    Shared by rotations and insertion/deletion — every operation that
+    reshapes the tree calls this on every node it touches.
+    """
+    nodo.altura = 1 + max(altura(nodo.izquierdo), altura(nodo.derecho))
