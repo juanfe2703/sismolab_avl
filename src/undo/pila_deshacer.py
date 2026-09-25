@@ -12,6 +12,20 @@ exactly what section 13 requires ("Las inserciones y rotaciones
 internas de una correccion o archivo masivo no se deshacen por
 separado").
 
+Why snapshots instead of hand-written inverses:
+    - Correctness is close to free: "restore the prior state" is
+      trivially right, whereas an inverse for e.g. a correction that
+      triggered two rotations, or a mass-archive that removed k nodes,
+      has to be re-derived and re-verified for every operation type.
+    - Cost: O(tamano del escenario) per push/pop instead of O(1). For
+      this project's scale that is an accepted, documented trade-off.
+      The alternative we discarded - a command log storing only the
+      diff, replayed backward - is cheaper per action but requires a
+      correct inverse for every one of the ~10 action types above,
+      including their rotation side effects; we judged that risk (an
+      incorrect inverse silently corrupting the tree) worse than the
+      memory cost for a lab-scale scenario. This trade-off is spelled
+      out in docs/manual_tecnico.md.
 
 `EstadoRestaurable` is intentionally an opaque Protocol: this module
 has zero knowledge of what a snapshot actually contains. The service

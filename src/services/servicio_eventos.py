@@ -29,6 +29,8 @@ from src.undo.pila_deshacer import PilaDeshacer
 
 from .calculadora_prioridad import calcular_prioridad
 from .contratos import ArbolAVLProtocol, RelojSimulacionProtocol, VerificadorZonaProtocol
+from .estado_evento import EstadoEvento
+from .gestor_asociaciones import GestorAsociaciones
 from .historico import Historico
 from .reporte import Reporte
 
@@ -49,15 +51,6 @@ class TipoResultado(Enum):
     NO_ENCONTRADO = auto()
 
 
-class EstadoEvento(Enum):
-    """For `localizar_evento` (section 6: 'el resultado debe indicar
-    si esta activo, archivado o eliminado')."""
-    ACTIVO = auto()
-    ARCHIVADO = auto()
-    ELIMINADO = auto()
-    DESCONOCIDO = auto()
-
-
 @dataclass
 class ResultadoOperacion:
     """One return shape for every operation in this service, so the
@@ -72,28 +65,38 @@ class ResultadoOperacion:
 class _Snapshot:
     """Opaque to PilaDeshacer; concrete here. `arbol.clonar()` /
     `historico.clonar()` are O(n) - the accepted cost of the
-    snapshot-based undo design (see pila_deshacer.py)."""
+    snapshot-based undo design (see pila_deshacer.py). `asociaciones`
+    is optional because ServicioEventos can run without a
+    GestorAsociaciones wired in (e.g. earlier-phase tests)."""
     arbol: ArbolAVLProtocol
     historico: Historico
+    asociaciones: Optional[GestorAsociaciones] = None
 
 
 class ServicioEventos:
     def __init__(self, arbol: ArbolAVLProtocol, historico: Historico,
                  verificador_zona: VerificadorZonaProtocol,
                  reloj: RelojSimulacionProtocol,
-                 pila_deshacer: PilaDeshacer) -> None:
+                 pila_deshacer: PilaDeshacer,
+                 gestor_asociaciones: Optional[GestorAsociaciones] = None) -> None:
         self._arbol = arbol
         self._historico = historico
         self._verificador_zona = verificador_zona
         self._reloj = reloj
         self._pila = pila_deshacer
+        self._gestor_asociaciones = gestor_asociaciones
 
     # ------------------------------------------------------------------
     # Undo plumbing
     # ------------------------------------------------------------------
 
     def _snapshot(self) -> _Snapshot:
-        return _Snapshot(arbol=self._arbol.clonar(), historico=self._historico.clonar())
+        return _Snapshot(
+            arbol=self._arbol.clonar(),
+            historico=self._historico.clonar(),
+            asociaciones=self._gestor_asociaciones.clonar()
+            if self._gestor_asociaciones is not None else None,
+        )
 
     def _restaurar(self, snapshot: _Snapshot) -> None:
         # In-place restore, not reference swap: the GUI / composition
@@ -101,9 +104,21 @@ class ServicioEventos:
         # built with, so undo must mutate what they already point to.
         self._arbol.restaurar_desde(snapshot.arbol)
         self._historico.restaurar_desde(snapshot.historico)
+        if self._gestor_asociaciones is not None and snapshot.asociaciones is not None:
+            self._gestor_asociaciones.restaurar_desde(snapshot.asociaciones)
 
     def _registrar_undo(self, descripcion: str, snapshot_previo: _Snapshot) -> None:
         self._pila.registrar(descripcion, snapshot_previo, self._restaurar)
+
+    def _recalcular_asociaciones_si_aplica(self) -> None:
+        """Called after any change that can affect who is a candidate
+        for whom: alta, revision mayor, reactivacion, correccion,
+        eliminacion (section 7: 'Un alta, una correccion, una
+        eliminacion... debe actualizar las asociaciones afectadas').
+        NOT called for confirmacion or marcar_revisado, since neither
+        touches magnitud, fecha_hora or epicentro."""
+        if self._gestor_asociaciones is not None:
+            self._gestor_asociaciones.recalcular_todas()
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -189,6 +204,7 @@ class ServicioEventos:
         snapshot = self._snapshot()
         clave = self._construir_clave(evento)
         self._arbol.insertar(clave, evento)
+        self._recalcular_asociaciones_si_aplica()
         self._registrar_undo(f"Alta manual del evento {identificador}", snapshot)
         return ResultadoOperacion(TipoResultado.ALTA, "Evento creado.", evento)
 
@@ -256,6 +272,7 @@ class ServicioEventos:
 
         clave = self._construir_clave(evento)
         self._arbol.insertar(clave, evento)
+        self._recalcular_asociaciones_si_aplica()
         return ResultadoOperacion(
             TipoResultado.ALTA, f"Nuevo evento {idf} registrado.", evento
         )
@@ -331,6 +348,7 @@ class ServicioEventos:
             if clave_anterior != nueva_clave:
                 self._arbol.eliminar(clave_anterior)
                 self._arbol.insertar(nueva_clave, evento)
+            self._recalcular_asociaciones_si_aplica()
             return ResultadoOperacion(
                 TipoResultado.ACTUALIZACION,
                 f"Evento {evento.identificador} actualizado a revision "
@@ -340,6 +358,7 @@ class ServicioEventos:
         # Reactivacion desde el historico.
         self._historico.reactivar(evento.identificador)
         self._arbol.insertar(nueva_clave, evento)
+        self._recalcular_asociaciones_si_aplica()
         return ResultadoOperacion(
             TipoResultado.REACTIVACION,
             f"Evento {evento.identificador} reactivado como pendiente.", evento,
@@ -402,6 +421,11 @@ class ServicioEventos:
         # retira+reinserta: el orden sigue siendo valido porque K no
         # cambio, y ya mutamos el evento en el sitio.
 
+        # Aunque K no haya cambiado, epicentro/fecha/magnitud pueden
+        # haber cambiado igual (p.ej. solo epicentro_x), y eso SI puede
+        # alterar candidatos/distancias de asociaciones (section 7).
+        self._recalcular_asociaciones_si_aplica()
+
         self._registrar_undo(f"Correccion del evento {identificador}", snapshot)
         return ResultadoOperacion(
             TipoResultado.CORRECCION_APLICADA,
@@ -452,6 +476,10 @@ class ServicioEventos:
         clave = self._construir_clave(evento)
         self._arbol.eliminar(clave)
         self._historico.eliminar(evento)
+        # El evento eliminado sale de la consideracion de asociaciones
+        # (section 7: 'Se consideran eventos activos y archivados, pero
+        # no eliminados'), y puede haber sido la referencia de otros.
+        self._recalcular_asociaciones_si_aplica()
         self._registrar_undo(f"Eliminacion del evento {identificador}", snapshot)
         return ResultadoOperacion(
             TipoResultado.ELIMINADO,

@@ -37,7 +37,7 @@ class ArbolFalso:
         return 1
 
     def recorrido_inorden(self) -> Iterator[Evento]:
-        return iter([])
+        return iter(self._por_clave.values())
 
     def recorrido_preorden(self) -> Iterator[Evento]:
         return iter([])
