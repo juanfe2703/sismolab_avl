@@ -16,6 +16,8 @@ from .clave_evento import ClaveEvento
 from .comparador import comparar_claves
 from .excepciones import ClaveDuplicadaError, ClaveNoEncontradaError
 from .nodo_avl import NodoAVL, actualizar_altura, factor_balance
+from .busqueda import buscar_en_arbol
+from .resultado_busqueda import ResultadoBusqueda
 
 
 class AVL:
@@ -27,6 +29,9 @@ class AVL:
 
     def eliminar(self, clave: ClaveEvento) -> None:
         self.raiz = _eliminar_recursivo(self.raiz, clave)
+
+    def buscar(self, clave: ClaveEvento) -> ResultadoBusqueda:
+        return buscar_en_arbol(self.raiz, clave)
 
 
 def _insertar_recursivo(
@@ -127,3 +132,5 @@ def _rebalancear_tras_eliminar(nodo: NodoAVL) -> NodoAVL:
         return rotar_izquierda(nodo)
 
     return nodo
+
+
