@@ -10,13 +10,16 @@ from .resultado_busqueda import ResultadoBusqueda
 from .bst import BST
 from .nodo_bst import NodoBinario, NodoBST
 from .busqueda import buscar_en_arbol
-
+from .registro_rotaciones import CasoBalanceo, ContadoresRotaciones, RotacionAplicada
 
 
 __all__ = [
     "AVL",
     "BST",
     "ResultadoBusqueda",
+    "CasoBalanceo",
+    "ContadoresRotaciones",
+    "RotacionAplicada",
     "ClaveEvento",
     "comparar_claves",
     "ClaveDuplicadaError",
