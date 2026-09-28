@@ -12,9 +12,10 @@ from typing import Optional
 
 from .clave_evento import ClaveEvento
 from .nodo_avl import NodoAVL
+from .nodo_bst import NodoBinario
 
 
-def recorrido_inorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
+def recorrido_inorden(raiz: Optional[NodoBinario]) -> list[ClaveEvento]:
     if raiz is None:
         return []
     return (
@@ -24,7 +25,7 @@ def recorrido_inorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
     )
 
 
-def recorrido_preorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
+def recorrido_preorden(raiz: Optional[NodoBinario]) -> list[ClaveEvento]:
     if raiz is None:
         return []
     return (
@@ -34,7 +35,7 @@ def recorrido_preorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
     )
 
 
-def recorrido_postorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
+def recorrido_postorden(raiz: Optional[NodoBinario]) -> list[ClaveEvento]:
     if raiz is None:
         return []
     return (
@@ -44,14 +45,14 @@ def recorrido_postorden(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
     )
 
 
-def recorrido_por_niveles(raiz: Optional[NodoAVL]) -> list[ClaveEvento]:
+def recorrido_por_niveles(raiz: Optional[NodoBinario]) -> list[ClaveEvento]:
     """Breadth-first traversal. Uses a deque as an internal BFS worklist —
     unrelated to the pending-reports FIFO queue required elsewhere."""
     if raiz is None:
         return []
 
     resultado: list[ClaveEvento] = []
-    pendientes: deque[NodoAVL] = deque([raiz])
+    pendientes: deque[NodoBinario] = deque([raiz])
     while pendientes:
         nodo = pendientes.popleft()
         resultado.append(nodo.clave)
