@@ -55,10 +55,14 @@ class TipoResultado(Enum):
 class ResultadoOperacion:
     """One return shape for every operation in this service, so the
     GUI can render a result without knowing which branch of section
-    6's table produced it."""
+    6's table produced it. `rotaciones` is needed by section 8's step
+    display ('mostrar... las rotaciones producidas') and defaults to 0
+    for operations that never touch the tree's structure (confirmar,
+    marcar revisado, rechazos)."""
     tipo: TipoResultado
     mensaje: str
     evento: Optional[Evento] = None
+    rotaciones: int = 0
 
 
 @dataclass

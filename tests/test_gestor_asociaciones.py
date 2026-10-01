@@ -4,9 +4,11 @@ once available in the real environment.
 """
 from datetime import datetime, timezone
 
+from src.model import Prioridad
 from src.services.estado_evento import EstadoEvento
 from src.services.gestor_asociaciones import GestorAsociaciones
 from src.services.historico import Historico
+from src.structures import ClaveEvento
 
 from .fakes import ArbolFalso
 
@@ -36,9 +38,12 @@ def _gestor(w_horas=48.0, r_km=40.0):
 
 
 def _insertar(arbol, evento):
-    # ArbolFalso solo necesita una clave hashable y distinta por id;
-    # el valor de la clave no importa para estas pruebas.
-    arbol.insertar(("clave", evento.identificador), evento)
+    # Clave real, requerida ahora que ArbolFalso mantiene una topologia
+    # de verdad (comparar_claves necesita una ClaveEvento genuina). La
+    # prioridad es irrelevante para GestorAsociaciones, que solo lee
+    # magnitud/fecha/epicentro, asi que se usa un valor fijo valido.
+    clave = ClaveEvento(Prioridad.MEDIA, evento.magnitud, evento.identificador)
+    arbol.insertar(clave, evento)
 
 
 # --------------------------------------------------------- candidatos ----

@@ -91,9 +91,16 @@ class PilaDeshacer:
         return [c.descripcion for c in self._pila]
 
     def vaciar(self) -> None:
-        """Called after loading a new scenario or restoring a named
-        version (section 12/13): a fresh scenario starts a fresh undo
-        history, it does not inherit the previous one's actions."""
+        """Clears the whole undo history. NOT called by a scenario
+        load: section 13 explicitly lists 'carga' among the actions
+        that must themselves be undoable ('Cada alta, correccion,
+        eliminacion, archivo masivo, cambio de parametros, avance del
+        reloj, cambio de atencion, carga y recuperacion global
+        constituye una accion independiente'), so a load pushes ONE
+        more Comando (whose snapshot is the whole scenario right
+        before the load) instead of discarding prior history. This
+        method exists for the empty-program starting state and for
+        tests, not for normal operation."""
         self._pila.clear()
 
     def __len__(self) -> int:

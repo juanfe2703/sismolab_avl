@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Iterator, Optional, Protocol, runtime_checkable
 
 from src.model import Evento
-from src.structures import ClaveEvento
+from src.structures import ClaveEvento, NodoAVL
 
 
 @runtime_checkable
@@ -77,6 +77,19 @@ class ArbolBusquedaProtocol(Protocol):
         hold a reference to this same tree object; undo must mutate
         what they are already pointing at, not swap it out from under
         them. This is the exact mirror of `clonar()`."""
+        ...
+
+    def obtener_raiz(self) -> Optional[NodoAVL]:
+        """The real root node (None if empty). Persistence walks the
+        actual left/right links from here to save the true topology
+        (section 12: 'Topologia real del arbol activo')."""
+        ...
+
+    def instalar_topologia(self, raiz: Optional[NodoAVL]) -> None:
+        """Install an ALREADY-VALIDATED node graph as this tree's
+        contents, in place, WITHOUT reinserting or rebalancing (section
+        12: 'recuperar esa topologia sin sustituirla por reinserciones').
+        The tree must rebuild whatever auxiliary id index it keeps."""
         ...
 
 

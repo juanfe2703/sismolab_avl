@@ -75,3 +75,11 @@ class ColaReportes:
         cola = cls()
         cola._cola = deque(reportes)
         return cola
+
+    # ---------- snapshot support (undo, section 13) ----------
+
+    def clonar(self) -> "ColaReportes":
+        return ColaReportes.desde_lista(self.a_lista())
+
+    def restaurar_desde(self, otro: "ColaReportes") -> None:
+        self._cola = deque(otro.a_lista())
