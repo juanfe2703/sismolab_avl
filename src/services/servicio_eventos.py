@@ -207,10 +207,10 @@ class ServicioEventos:
 
         snapshot = self._snapshot()
         clave = self._construir_clave(evento)
-        self._arbol.insertar(clave, evento)
+        rotaciones = self._arbol.insertar(clave, evento)
         self._recalcular_asociaciones_si_aplica()
         self._registrar_undo(f"Alta manual del evento {identificador}", snapshot)
-        return ResultadoOperacion(TipoResultado.ALTA, "Evento creado.", evento)
+        return ResultadoOperacion(TipoResultado.ALTA, "Evento creado.", evento, rotaciones)
 
     # ------------------------------------------------------------------
     # Reportes de estacion (section 6, tabla de 'Procesamiento de
@@ -275,10 +275,10 @@ class ServicioEventos:
             return ResultadoOperacion(TipoResultado.RECHAZADO_INVALIDO, str(exc))
 
         clave = self._construir_clave(evento)
-        self._arbol.insertar(clave, evento)
+        rotaciones = self._arbol.insertar(clave, evento)
         self._recalcular_asociaciones_si_aplica()
         return ResultadoOperacion(
-            TipoResultado.ALTA, f"Nuevo evento {idf} registrado.", evento
+            TipoResultado.ALTA, f"Nuevo evento {idf} registrado.", evento, rotaciones
         )
 
     def _resolver_sobre_activo(self, evento: Evento, reporte: Reporte) -> ResultadoOperacion:
@@ -349,23 +349,24 @@ class ServicioEventos:
         nueva_clave = self._construir_clave(evento)
 
         if era_activo:
+            rotaciones = 0
             if clave_anterior != nueva_clave:
-                self._arbol.eliminar(clave_anterior)
-                self._arbol.insertar(nueva_clave, evento)
+                rotaciones += self._arbol.eliminar(clave_anterior)
+                rotaciones += self._arbol.insertar(nueva_clave, evento)
             self._recalcular_asociaciones_si_aplica()
             return ResultadoOperacion(
                 TipoResultado.ACTUALIZACION,
                 f"Evento {evento.identificador} actualizado a revision "
-                f"{evento.revision}.", evento,
+                f"{evento.revision}.", evento, rotaciones,
             )
 
         # Reactivacion desde el historico.
         self._historico.reactivar(evento.identificador)
-        self._arbol.insertar(nueva_clave, evento)
+        rotaciones = self._arbol.insertar(nueva_clave, evento)
         self._recalcular_asociaciones_si_aplica()
         return ResultadoOperacion(
             TipoResultado.REACTIVACION,
-            f"Evento {evento.identificador} reactivado como pendiente.", evento,
+            f"Evento {evento.identificador} reactivado como pendiente.", evento, rotaciones,
         )
 
     # ------------------------------------------------------------------
@@ -415,12 +416,14 @@ class ServicioEventos:
         evento.estado_atencion = EstadoAtencion.PENDIENTE
 
         nueva_clave = self._construir_clave(evento)
+        rotaciones = 0
         if nueva_clave != clave_anterior:
             # P o M cambiaron: retira e inserta como parte de esta
             # misma accion (no se registran las rotaciones internas
-            # por separado, section 5 y 13).
-            self._arbol.eliminar(clave_anterior)
-            self._arbol.insertar(nueva_clave, evento)
+            # por separado, section 5 y 13), pero SI se suman para
+            # reportarlas como un solo numero (section 8).
+            rotaciones += self._arbol.eliminar(clave_anterior)
+            rotaciones += self._arbol.insertar(nueva_clave, evento)
         # Si la clave no cambio, el documento permite evitar el
         # retira+reinserta: el orden sigue siendo valido porque K no
         # cambio, y ya mutamos el evento en el sitio.
@@ -434,7 +437,7 @@ class ServicioEventos:
         return ResultadoOperacion(
             TipoResultado.CORRECCION_APLICADA,
             f"Evento {identificador} corregido (revision {evento.revision}).",
-            evento,
+            evento, rotaciones,
         )
 
     # ------------------------------------------------------------------
@@ -478,7 +481,7 @@ class ServicioEventos:
 
         snapshot = self._snapshot()
         clave = self._construir_clave(evento)
-        self._arbol.eliminar(clave)
+        rotaciones = self._arbol.eliminar(clave)
         self._historico.eliminar(evento)
         # El evento eliminado sale de la consideracion de asociaciones
         # (section 7: 'Se consideran eventos activos y archivados, pero
@@ -487,7 +490,7 @@ class ServicioEventos:
         self._registrar_undo(f"Eliminacion del evento {identificador}", snapshot)
         return ResultadoOperacion(
             TipoResultado.ELIMINADO,
-            f"Evento {identificador} eliminado.", evento,
+            f"Evento {identificador} eliminado.", evento, rotaciones,
         )
 
     # ------------------------------------------------------------------

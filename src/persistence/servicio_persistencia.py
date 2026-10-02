@@ -37,7 +37,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 from src.services.calculadora_prioridad import calcular_prioridad
 from src.services.cola_reportes import ColaReportes
@@ -234,7 +234,7 @@ class ServicioPersistencia:
         }
         _escribir_json_atomico(ruta, documento)
 
-    def cargar_estructural(self, ruta: str) -> ResultadoCarga:
+    def cargar_estructural(self, ruta: str, descripcion: Optional[str] = None) -> ResultadoCarga:
         try:
             with open(ruta, "r", encoding="utf-8") as f:
                 documento = json.load(f)
@@ -350,7 +350,7 @@ class ServicioPersistencia:
         snapshot_previo = self._escenario.clonar()
         self._escenario.restaurar_desde(nuevo_escenario)
         self._pila.registrar(
-            f"Carga estructural desde {ruta}", snapshot_previo, self._escenario.restaurar_desde
+            descripcion or f"Carga estructural desde {ruta}", snapshot_previo, self._escenario.restaurar_desde
         )
         return ResultadoCarga(True, "Escenario cargado.")
 

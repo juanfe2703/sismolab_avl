@@ -1,12 +1,26 @@
-"""A fake tree satisfying ArbolAVLProtocol, used ONLY to test the
-services layer before the real AVL exists. It maintains a REAL linked
-node graph (so persistence's topology export/import has something
-genuine to walk), inserted as a plain BST by `comparar_claves` - but it
-never rotates. `recuperar_balance` only clears the `modo_estres` flag;
-it does not actually rebalance. None of this is delivered code: it
-exists purely so the business-rule tests in this folder can run
-against something that honors the Protocol contract in
-`src/services/contratos.py`.
+"""ArbolDemostracion: a PLACEHOLDER implementing ArbolAVLProtocol as a
+plain (unbalanced) BST.
+
+This is NOT the project's AVL deliverable. It exists only so this GUI
+can be launched and clicked through today, before `structures`
+delivers the real, hand-written AVL with real rotations. It satisfies
+the full contract in `src/services/contratos.py` - insert/delete/search,
+the id index, clonar/restaurar_desde for undo, obtener_raiz/
+instalar_topologia for persistence - so every service built in this
+project already works against it unmodified.
+
+Swapping it out later is a ONE-LINE change in `app.py`'s composition
+root (the `fabrica_arbol_avl` argument), because every service in this
+project was written against the `ArbolAVLProtocol` Protocol, never
+against this class directly - which was the whole point of using
+Protocols from the start (see `src/services/contratos.py`'s own
+docstring).
+
+`activar_modo_estres` / `recuperar_balance` only toggle a flag here;
+this placeholder never actually rotates, so "recovering balance" is a
+no-op beyond clearing the flag. Real rotation counting, rotation
+mechanics (LL/RR/LR/RL) and genuine stress-mode deferral belong to the
+real AVL, not here.
 """
 from __future__ import annotations
 
@@ -17,18 +31,11 @@ from src.model import Evento
 from src.structures import ClaveEvento, NodoAVL, altura, comparar_claves, factor_balance
 
 
-class ArbolFalso:
+class ArbolDemostracion:
     def __init__(self) -> None:
         self._raiz: Optional[NodoAVL] = None
         self._indice_por_id: dict[int, NodoAVL] = {}
         self.modo_estres: bool = False
-        # Permite a las pruebas simular que una insercion/eliminacion
-        # produjo N rotaciones, sin tener que implementar rotaciones
-        # reales en este doble (que solo existe para probar la LOGICA
-        # de negocio de los servicios, no el balanceo del AVL).
-        self.rotaciones_simuladas: int = 0
-
-    # ---------- internals ----------
 
     def _reindexar(self) -> None:
         self._indice_por_id = {}
@@ -50,12 +57,6 @@ class ArbolFalso:
         nodo.altura = 1 + max(izq, der)
         return nodo.altura
 
-    def _tras_cambio_estructural(self) -> None:
-        self._recalcular_alturas(self._raiz)
-        self._reindexar()
-
-    # ---------- ArbolBusquedaProtocol ----------
-
     def insertar(self, clave: ClaveEvento, evento: Evento) -> int:
         nuevo = NodoAVL(clave, evento)
         if self._raiz is None:
@@ -73,27 +74,28 @@ class ArbolFalso:
                         actual.derecho = nuevo
                         break
                     actual = actual.derecho
-        self._tras_cambio_estructural()
-        return self.rotaciones_simuladas  # el fake nunca rota de verdad
+        self._recalcular_alturas(self._raiz)
+        self._reindexar()
+        return 0
 
     def eliminar(self, clave: ClaveEvento) -> int:
-        def _eliminar_rec_por_clave(nodo: Optional[NodoAVL], clave_obj: ClaveEvento) -> Optional[NodoAVL]:
-            comparacion = comparar_claves(clave_obj, nodo.clave)
-            if comparacion < 0:
-                nodo.izquierdo = _eliminar_rec_por_clave(nodo.izquierdo, clave_obj)
+        def _quitar(nodo, buscada):
+            comp = comparar_claves(buscada, nodo.clave)
+            if comp < 0:
+                nodo.izquierdo = _quitar(nodo.izquierdo, buscada)
                 return nodo
-            if comparacion > 0:
-                nodo.derecho = _eliminar_rec_por_clave(nodo.derecho, clave_obj)
+            if comp > 0:
+                nodo.derecho = _quitar(nodo.derecho, buscada)
                 return nodo
             return nodo.derecho if nodo.izquierdo is None else nodo.izquierdo
 
-        def _eliminar_rec(nodo: Optional[NodoAVL]) -> Optional[NodoAVL]:
+        def _eliminar_rec(nodo):
             if nodo is None:
                 raise KeyError(clave)
-            comparacion = comparar_claves(clave, nodo.clave)
-            if comparacion < 0:
+            comp = comparar_claves(clave, nodo.clave)
+            if comp < 0:
                 nodo.izquierdo = _eliminar_rec(nodo.izquierdo)
-            elif comparacion > 0:
+            elif comp > 0:
                 nodo.derecho = _eliminar_rec(nodo.derecho)
             else:
                 if nodo.izquierdo is None:
@@ -104,24 +106,25 @@ class ArbolFalso:
                 while sucesor.izquierdo is not None:
                     sucesor = sucesor.izquierdo
                 nodo.clave, nodo.evento_ref = sucesor.clave, sucesor.evento_ref
-                nodo.derecho = _eliminar_rec_por_clave(nodo.derecho, sucesor.clave)
+                nodo.derecho = _quitar(nodo.derecho, sucesor.clave)
             return nodo
 
         self._raiz = _eliminar_rec(self._raiz)
-        self._tras_cambio_estructural()
-        return self.rotaciones_simuladas
+        self._recalcular_alturas(self._raiz)
+        self._reindexar()
+        return 0
 
     def buscar_por_id(self, identificador: int) -> Optional[Evento]:
         nodo = self._indice_por_id.get(identificador)
         return nodo.evento_ref if nodo is not None else None
 
     def nodos_visitados_ultima_operacion(self) -> int:
-        return 1  # no medido en el fake; no usado por las pruebas actuales
+        return 1
 
     def _recorrido(self, orden: str) -> Iterator[Evento]:
         resultado: list[Evento] = []
 
-        def visitar(nodo: Optional[NodoAVL]) -> None:
+        def visitar(nodo):
             if nodo is None:
                 return
             if orden == "pre":
@@ -168,49 +171,40 @@ class ArbolFalso:
             1 for n in self._indice_por_id.values() if n.izquierdo is None and n.derecho is None
         )
 
-    def clonar(self) -> "ArbolFalso":
-        copia = ArbolFalso()
+    def clonar(self) -> "ArbolDemostracion":
+        copia = ArbolDemostracion()
         copia._raiz = deepcopy(self._raiz)
         copia.modo_estres = self.modo_estres
-        copia.rotaciones_simuladas = self.rotaciones_simuladas
         copia._reindexar()
         return copia
 
-    def restaurar_desde(self, otro: "ArbolFalso") -> None:
+    def restaurar_desde(self, otro: "ArbolDemostracion") -> None:
         self._raiz = deepcopy(otro._raiz)
         self.modo_estres = otro.modo_estres
-        self.rotaciones_simuladas = otro.rotaciones_simuladas
         self._reindexar()
-
-    # ---------- ArbolAVLProtocol ----------
 
     def activar_modo_estres(self) -> None:
         self.modo_estres = True
 
     def recuperar_balance(self) -> int:
-        # El fake nunca desbalancea nada de verdad, asi que "recuperar"
-        # solo apaga la bandera. Lo que se prueba con este doble es la
-        # logica de negocio de los servicios, no el balanceo del AVL.
         self.modo_estres = False
         return 0
 
     def profundidad_de(self, identificador: int) -> int:
-        nodo_objetivo = self._indice_por_id.get(identificador)
-        if nodo_objetivo is None:
+        objetivo = self._indice_por_id.get(identificador)
+        if objetivo is None:
             raise KeyError(identificador)
         profundidad = 0
         actual = self._raiz
-        while actual is not nodo_objetivo:
-            comparacion = comparar_claves(nodo_objetivo.clave, actual.clave)
-            actual = actual.izquierdo if comparacion < 0 else actual.derecho
+        while actual is not objetivo:
+            comp = comparar_claves(objetivo.clave, actual.clave)
+            actual = actual.izquierdo if comp < 0 else actual.derecho
             profundidad += 1
         return profundidad
 
     def factor_balance_de(self, identificador: int) -> int:
         nodo = self._indice_por_id.get(identificador)
         return factor_balance(nodo) if nodo is not None else 0
-
-    # ---------- extensiones para persistencia ----------
 
     def obtener_raiz(self) -> Optional[NodoAVL]:
         return self._raiz
@@ -219,25 +213,3 @@ class ArbolFalso:
         self._raiz = raiz
         self._recalcular_alturas(self._raiz)
         self._reindexar()
-
-
-class ZonaFalsa:
-    """Everything is populated - or configure `poblados` per call, used
-    to reproduce section 4's own worked example (M=4.5, H=30.0)."""
-
-    def __init__(self, poblado_por_defecto: bool = True) -> None:
-        self.poblado_por_defecto = poblado_por_defecto
-
-    def es_zona_poblada(self, x: float, y: float) -> bool:
-        return self.poblado_por_defecto
-
-
-class RelojFalso:
-    def __init__(self, ahora):
-        self._ahora = ahora
-
-    def ahora(self):
-        return self._ahora
-
-    def avanzar(self, nuevo_instante) -> None:
-        self._ahora = nuevo_instante

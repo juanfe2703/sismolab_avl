@@ -1,1 +1,4 @@
-pytest
+# Este proyecto usa solo la libreria estandar de Python (Tkinter para
+# la GUI, json para persistencia) en el codigo de produccion.
+# Dependencia opcional solo para desarrollo/pruebas:
+pytest>=7.0
